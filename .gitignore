@@ -1,0 +1,28 @@
+# Ambiente virtual
+venv/
+env/
+
+# Banco de dados
+db.sqlite3
+
+# Arquivos de mídia
+media/
+
+# Arquivos de log
+*.log
+
+# Arquivos do sistema operacional
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+
+# Migrações (se quiser versionar só mudanças principais)
+*/migrations/0*.py
+
+# Arquivos sensíveis
+*.pyc
+__pycache__/
+.env  # Se usar para senhas
