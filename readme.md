@@ -55,3 +55,7 @@ textAcesse em `http://127.0.0.1:8000/admin/` para admin.
 - `network/`: App principal (modelos, views, serializers).
 - `db.sqlite3`: Banco local (não commite!).
 
+### Documentação Automática
+- Swagger UI: `http://127.0.0.1:8000/api/schema/swagger-ui/`
+- ReDoc: `http://127.0.0.1:8000/api/schema/redoc/`
+

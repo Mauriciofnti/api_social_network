@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'rest_framework_simplejwt',
+    'drf_spectacular',
     'network',
 ]
 
@@ -131,6 +132,7 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
 from datetime import timedelta
@@ -138,6 +140,18 @@ from datetime import timedelta
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Social API',
+    'DESCRIPTION': 'API de rede social simples com Django e DRF',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,  # Evita loop em schema
+    'SWAGGER_UI_SETTINGS': {
+        'deepLinking': True,
+        'defaultModelsExpandDepth': 1,
+    },
+    'COMPONENT_SPLIT_REQUEST': True,  # Melhora docs para POSTs
 }
 
 AUTH_USER_MODEL = 'network.User'
