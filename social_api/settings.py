@@ -146,17 +146,17 @@ SPECTACULAR_SETTINGS = {
     'TITLE': 'Social API',
     'DESCRIPTION': 'API de rede social simples com Django e DRF',
     'VERSION': '1.0.0',
-    'SERVE_INCLUDE_SCHEMA': False,  # Evita loop em schema
+    'SERVE_INCLUDE_SCHEMA': False,
     'SWAGGER_UI_SETTINGS': {
         'deepLinking': True,
         'defaultModelsExpandDepth': 1,
     },
-    'COMPONENT_SPLIT_REQUEST': True,  # Melhora docs para POSTs
+    'COMPONENT_SPLIT_REQUEST': True,
 }
 
 AUTH_USER_MODEL = 'network.User'
 
 import dj_database_url
 DATABASES['default'] = dj_database_url.config(default='sqlite:///db.sqlite3')
-ALLOWED_HOSTS = ['*']  # Para dev; mude para ['sua-app.onrender.com'] depois
-STATIC_ROOT = BASE_DIR / 'staticfiles'  # Para static files
+ALLOWED_HOSTS = ['*']
+STATIC_ROOT = BASE_DIR / 'staticfiles'

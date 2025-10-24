@@ -1,108 +1,108 @@
-# Social API 🚀
+# Snaply - Social Network API 🚀
 
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue)](https://www.python.org/) [![Django](https://img.shields.io/badge/Django-4.2%2B-green)](https://www.djangoproject.com/) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Uma API RESTful inspirada em redes sociais, construída com Django e Django REST Framework (DRF). Suporta cadastro de usuários, posts, follows, likes, comentários e feed personalizado. Totalmente autenticada com JWT e documentada com Swagger.
+A RESTful API inspired by social networks, built with Django and Django REST Framework (DRF). Supports user registration, posts, follows, likes, comments, and personalized feed. Fully authenticated with JWT and documented with Swagger.
 
-## Recursos
-- **Autenticação Segura**: Tokens JWT para sessões stateless.
-- **Endpoints Robustos**: CRUD para usuários e posts, com interações (follow, like, comentários, feed).
-- **Serialização Avançada**: Contagens dinâmicas (followers, likes) e aninhamento de dados; atualizações parciais (PATCH) para bio/password (bloqueia username/email).
-- **Documentação Automática**: Swagger UI e ReDoc para testes interativos.
-- **Testes Unitários**: Cobertura básica para serializers e views.
+## Features
+- **Secure Authentication**: JWT tokens for stateless sessions.
+- **Robust Endpoints**: CRUD for users and posts, with interactions (follow, like, comments, feed).
+- **Advanced Serialization**: Dynamic counts (followers, likes) and nested data; partial updates (PATCH) for bio/password (blocks username/email).
+- **Automatic Documentation**: Swagger UI and ReDoc for interactive testing.
+- **Unit Tests**: Basic coverage for serializers and views.
 
-## Pré-requisitos
+## Prerequisites
 - Python 3.8+.
 - Git.
 
-## Instalação Rápida
-1. Clone o repositório:
+## Quick Installation
+1. Clone the repository:
    ```
    git clone https://github.com/Mauriciofnti/api_social_network.git
    cd social-api
    ```
-2. Crie e ative ambiente virtual:
+2. Create and activate virtual environment:
    ```
    python -m venv venv
    # Windows: venv\Scripts\activate
    # Linux/Mac: source venv/bin/activate
    ```
-3. Instale dependências:
+3. Install dependencies:
    ```
    pip install -r requirements.txt
    ```
-4. Aplique migrações:
+4. Apply migrations:
    ```
    python manage.py makemigrations
    python manage.py migrate
    ```
-5. Crie superusuário:
+5. Create superuser:
    ```
    python manage.py createsuperuser
    ```
-6. Inicie o servidor:
+6. Start the server:
    ```
    python manage.py runserver
    ```
    - Admin: `http://127.0.0.1:8000/admin/`
    - API: `http://127.0.0.1:8000/api/`
 
-## Uso da API
+## API Usage
 Base URL: `http://127.0.0.1:8000/api/`.
 
-### Endpoints Principais
-| Método | Endpoint                  | Descrição                                      | Autenticação |
-|--------|---------------------------|------------------------------------------------|--------------|
-| GET    | `/users/`                | Lista usuários                                 | Não         |
-| POST   | `/users/`                | Cria usuário (body: `{"username": "...", "email": "...", "password": "...", "bio": "..."}`) | Não         |
-| GET    | `/users/<id>/`           | Detalhes de usuário (leitura aberta)           | Não         |
-| PATCH  | `/users/<id>/`           | Atualiza parcial (body: ex. `{"bio": "...", "email": "..."}`; bloqueia username/email) | Sim (só dono) |
-| POST   | `/users/<id>/follow/`    | Segue usuário                                  | Sim         |
-| POST   | `/users/<id>/unfollow/`  | Para de seguir usuário                         | Sim         |
-| POST   | `/posts/`                | Cria post (body: `{"content": "..."}`)         | Sim         |
-| GET    | `/posts/`                | Lista posts do usuário logado                  | Sim         |
-| GET    | `/posts/<id>/`           | Detalhes de post                               | Sim         |
-| POST   | `/posts/<id>/like/`      | Curte/descurte post                            | Sim         |
-| POST   | `/posts/<id>/comments/`  | Adiciona comentário (body: `{"content": "..."}`) | Sim         |
-| GET    | `/posts/<id>/comments/`  | Lista comentários do post                      | Sim         |
-| GET    | `/feed/`                 | Feed (posts de usuários seguidos)              | Sim         |
+### Main Endpoints
+| Method | Endpoint                  | Description                                      | Authentication |
+|--------|---------------------------|--------------------------------------------------|---------------|
+| GET    | `/users/`                | List users                                       | No            |
+| POST   | `/users/`                | Create user (body: `{"username": "...", "email": "...", "password": "...", "bio": "..."}`) | No            |
+| GET    | `/users/<id>/`           | User details (open read)                         | No            |
+| PATCH  | `/users/<id>/`           | Partial update (body: ex. `{"bio": "...", "email": "..."}`; blocks username/email) | Yes (owner only) |
+| POST   | `/users/<id>/follow/`    | Follow user                                      | Yes           |
+| POST   | `/users/<id>/unfollow/`  | Unfollow user                                    | Yes           |
+| POST   | `/posts/`                | Create post (body: `{"content": "..."}`)         | Yes           |
+| GET    | `/posts/`                | List logged-in user's posts                      | Yes           |
+| GET    | `/posts/<id>/`           | Post details                                     | Yes           |
+| POST   | `/posts/<id>/like/`      | Like/unlike post                                 | Yes           |
+| POST   | `/posts/<id>/comments/`  | Add comment (body: `{"content": "..."}`)         | Yes           |
+| GET    | `/posts/<id>/comments/`  | List post comments                               | Yes           |
+| GET    | `/feed/`                 | Feed (posts from followed users)                 | Yes           |
 
-- **Autenticação**: POST `/api/token/` com body `{"username": "...", "password": "..."}` → Retorna `access` e `refresh`. Use header `Authorization: Bearer <access_token>` em endpoints protegidos. Renove com POST `/api/token/refresh/`.
+- **Authentication**: POST `/api/token/` with body `{"username": "...", "password": "..."}` → Returns `access` and `refresh`. Use header `Authorization: Bearer <access_token>` for protected endpoints. Renew with POST `/api/token/refresh/`.
 
-## Testando
-- **Postman**: Crie uma collection com variável `{{base_url}} = http://127.0.0.1:8000`. Adicione script no "Tests" do login para salvar `{{access_token}}`.
-- **Swagger UI**: `http://127.0.0.1:8000/api/schema/swagger-ui/` (clique "Authorize" para JWT).
+## Testing
+- **Postman**: Create a collection with variable `{{base_url}} = http://127.0.0.1:8000`. Add script in "Tests" of login to save `{{access_token}}`.
+- **Swagger UI**: `http://127.0.0.1:8000/api/schema/swagger-ui/` (click "Authorize" for JWT).
 - **ReDoc**: `http://127.0.0.1:8000/api/schema/redoc/`.
-- **Testes Unitários**: `python manage.py test network`.
+- **Unit Tests**: `python manage.py test network`.
 
-## Estrutura do Projeto
+## Project Structure
 ```
 social-django/
 ├── manage.py
-├── social_api/          # Configurações globais
+├── social_api/          # Global configurations
 │   ├── settings.py
 │   └── urls.py
-├── network/             # App principal
+├── network/             # Main app
 │   ├── models.py        # User, Post, Comment
 │   ├── serializers.py   # UserSerializer, PostSerializer, CommentSerializer
-│   ├── views.py         # Views genéricas e @api_view
-│   ├── urls.py          # Rotas da API
+│   ├── views.py         # Generic views and @api_view
+│   ├── urls.py          # API routes
 │   ├── admin.py
-│   └── tests.py         # Testes unitários
-├── db.sqlite3           # Banco local (ignorado no Git)
-├── requirements.txt     # Dependências
-├── README.md            # Este arquivo
-└── .gitignore           # Exclui venv, db, etc.
+│   └── tests.py         # Unit tests
+├── db.sqlite3           # Local DB (ignored in Git)
+├── requirements.txt     # Dependencies
+├── README.md            # This file
+└── .gitignore           # Excludes venv, db, etc.
 ```
 
-## Contribuição
-1. Fork o repo.
-2. Crie branch: `git checkout -b feature/nova-funcionalidade`.
-3. Commit: `git commit -m "Adiciona nova funcionalidade"`.
-4. Push: `git push origin feature/nova-funcionalidade`.
-5. Abra PR.
+## Contribution
+1. Fork the repo.
+2. Create branch: `git checkout -b feature/new-feature`.
+3. Commit: `git commit -m "Add new feature"`.
+4. Push: `git push origin feature/new-feature`.
+5. Open PR.
 
-Issues para bugs ou ideias!
+Issues for bugs or ideas!
 
-## Licença
-MIT License – veja [LICENSE](LICENSE).
+## License
+MIT License – see [LICENSE](LICENSE).
