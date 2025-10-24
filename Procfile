@@ -1,0 +1,1 @@
+web: gunicorn social_api.wsgi --log-file -

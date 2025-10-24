@@ -2,12 +2,12 @@
 
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue)](https://www.python.org/) [![Django](https://img.shields.io/badge/Django-4.2%2B-green)](https://www.djangoproject.com/) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Uma API RESTful inspirada em redes sociais, construída com Django e Django REST Framework (DRF). Suporta cadastro de usuários, posts, follows, likes e feed personalizado. Totalmente autenticada com JWT e documentada com Swagger.
+Uma API RESTful inspirada em redes sociais, construída com Django e Django REST Framework (DRF). Suporta cadastro de usuários, posts, follows, likes, comentários e feed personalizado. Totalmente autenticada com JWT e documentada com Swagger.
 
 ## Recursos
 - **Autenticação Segura**: Tokens JWT para sessões stateless.
-- **Endpoints Robustos**: CRUD para usuários e posts, com interações (follow, like, feed).
-- **Serialização Avançada**: Contagens dinâmicas (followers, likes) e aninhamento de dados.
+- **Endpoints Robustos**: CRUD para usuários e posts, com interações (follow, like, comentários, feed).
+- **Serialização Avançada**: Contagens dinâmicas (followers, likes) e aninhamento de dados; atualizações parciais (PATCH) para bio/password (bloqueia username/email).
 - **Documentação Automática**: Swagger UI e ReDoc para testes interativos.
 - **Testes Unitários**: Cobertura básica para serializers e views.
 
@@ -54,14 +54,17 @@ Base URL: `http://127.0.0.1:8000/api/`.
 | Método | Endpoint                  | Descrição                                      | Autenticação |
 |--------|---------------------------|------------------------------------------------|--------------|
 | GET    | `/users/`                | Lista usuários                                 | Não         |
-| POST   | `/users/`                | Cria usuário (body: `{"username": "...", "email": "...", "password": "..."}`) | Não         |
-| GET    | `/users/<id>/`           | Detalhes de usuário                            | Não         |
+| POST   | `/users/`                | Cria usuário (body: `{"username": "...", "email": "...", "password": "...", "bio": "..."}`) | Não         |
+| GET    | `/users/<id>/`           | Detalhes de usuário (leitura aberta)           | Não         |
+| PATCH  | `/users/<id>/`           | Atualiza parcial (body: ex. `{"bio": "...", "email": "..."}`; bloqueia username/email) | Sim (só dono) |
 | POST   | `/users/<id>/follow/`    | Segue usuário                                  | Sim         |
 | POST   | `/users/<id>/unfollow/`  | Para de seguir usuário                         | Sim         |
 | POST   | `/posts/`                | Cria post (body: `{"content": "..."}`)         | Sim         |
 | GET    | `/posts/`                | Lista posts do usuário logado                  | Sim         |
 | GET    | `/posts/<id>/`           | Detalhes de post                               | Sim         |
 | POST   | `/posts/<id>/like/`      | Curte/descurte post                            | Sim         |
+| POST   | `/posts/<id>/comments/`  | Adiciona comentário (body: `{"content": "..."}`) | Sim         |
+| GET    | `/posts/<id>/comments/`  | Lista comentários do post                      | Sim         |
 | GET    | `/feed/`                 | Feed (posts de usuários seguidos)              | Sim         |
 
 - **Autenticação**: POST `/api/token/` com body `{"username": "...", "password": "..."}` → Retorna `access` e `refresh`. Use header `Authorization: Bearer <access_token>` em endpoints protegidos. Renove com POST `/api/token/refresh/`.
@@ -80,8 +83,8 @@ social-django/
 │   ├── settings.py
 │   └── urls.py
 ├── network/             # App principal
-│   ├── models.py        # User, Post
-│   ├── serializers.py   # UserSerializer, PostSerializer
+│   ├── models.py        # User, Post, Comment
+│   ├── serializers.py   # UserSerializer, PostSerializer, CommentSerializer
 │   ├── views.py         # Views genéricas e @api_view
 │   ├── urls.py          # Rotas da API
 │   ├── admin.py
@@ -91,10 +94,6 @@ social-django/
 ├── README.md            # Este arquivo
 └── .gitignore           # Exclui venv, db, etc.
 ```
-
-## Deploy
-- **Heroku (Grátis)**: Adicione `Procfile` (`web: gunicorn social_api.wsgi`), `runtime.txt` (`python-3.12.3`), instale `gunicorn dj-database-url`. Rode `heroku create`, `git push heroku main`, `heroku run migrate`.
-- Alternativas: Railway (GitHub auto-deploy), Vercel.
 
 ## Contribuição
 1. Fork o repo.

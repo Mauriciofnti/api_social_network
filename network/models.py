@@ -13,3 +13,15 @@ class Post(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+
+class Comment(models.Model):
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='comments')  # Liga ao post
+    author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='comments')  # Quem comentou
+    content = models.TextField(max_length=500)  # Texto do comentário
+    created_at = models.DateTimeField(auto_now_add=True)  # Data auto
+
+    class Meta:
+        ordering = ['-created_at']  # Mais novos primeiro
+
+    def __str__(self):
+        return f'Comentário de {self.author.username} no post {self.post.id}'

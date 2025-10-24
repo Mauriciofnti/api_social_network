@@ -155,3 +155,8 @@ SPECTACULAR_SETTINGS = {
 }
 
 AUTH_USER_MODEL = 'network.User'
+
+import dj_database_url
+DATABASES['default'] = dj_database_url.config(default='sqlite:///db.sqlite3')
+ALLOWED_HOSTS = ['*']  # Para dev; mude para ['sua-app.onrender.com'] depois
+STATIC_ROOT = BASE_DIR / 'staticfiles'  # Para static files
