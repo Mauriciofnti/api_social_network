@@ -289,6 +289,8 @@ class FeedList(generics.ListAPIView):
 
     def get_queryset(self):
         following = self.request.user.following.all()
-        if not following.exists():
-            following = [self.request.user]
-        return Post.objects.filter(author__in=following).order_by('-created_at')
+        # ← FIX: Sempre inclui posts do próprio user (union com following)
+        own_posts = Post.objects.filter(author=self.request.user)
+        if following.exists():
+            return Post.objects.filter(author__in=following) | own_posts.order_by('-created_at')
+        return own_posts.order_by('-created_at')  # Se sem following, só own

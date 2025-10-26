@@ -3,7 +3,7 @@ from .views import (
     CustomTokenObtainPairView, CurrentUserView, UserList, UserDetail,
     PostList, PostDetail, FeedList, CommentListCreateAPIView,
     toggle_follow_user, get_follow_status, like_post
-)  # Removidos follow/unfollow se não usar mais
+)
 
 urlpatterns = [
     # Auth
