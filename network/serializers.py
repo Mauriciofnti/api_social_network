@@ -20,17 +20,11 @@ class UserSerializer(serializers.ModelSerializer):
         return user
 
     def update(self, instance, validated_data):
-        # NOTA: O tratamento de restrição de campos agora será feito via 
-        # UserUpdateSerializer.read_only_fields.
-        
         password = validated_data.pop('password', None)
         if password:
             instance.set_password(password)
         
-        # Chama a implementação padrão para aplicar os campos restantes (como 'bio')
         instance = super().update(instance, validated_data) 
-        
-        # Salva o objeto (necessário se a senha foi alterada)
         instance.save()
         return instance
 
@@ -42,14 +36,29 @@ class UserSerializer(serializers.ModelSerializer):
     def get_following_count(self, obj) -> int:
         return obj.following.count()
 
-# NOVO SERIALIZER DEDICADO PARA ATUALIZAÇÃO (PATCH)
-class UserUpdateSerializer(UserSerializer):
+# SERIALIZER PARA ATUALIZAÇÃO (PATCH) - AJUSTE: Fields explícitos pra bio/password only
+class UserUpdateSerializer(serializers.ModelSerializer):
     """
-    Serializador para atualizar perfil (PATCH). Torna username e email read-only.
+    Serializador para atualizar perfil (PATCH). Só bio e password editáveis.
     """
-    class Meta(UserSerializer.Meta):
-        read_only_fields = ('username', 'email', 'followers_count', 'following_count')
-        # Mantém 'bio' e 'password' editáveis. O 'update' será herdado do UserSerializer.
+    password = serializers.CharField(write_only=True, min_length=6, required=False, allow_blank=True)  # ← FIX: Opcional, min_length, blank
+
+    class Meta:
+        model = User
+        fields = ['bio', 'password']  # ← FIX: Explícito só esses (sem username/email read_only issues)
+
+    def update(self, instance, validated_data):
+        # Herda o handling de password do UserSerializer
+        password = validated_data.pop('password', None)
+        if password:
+            instance.set_password(password)
+        
+        # Update bio se enviado
+        if 'bio' in validated_data:
+            instance.bio = validated_data['bio']
+        
+        instance.save()
+        return instance
 
 class PostSerializer(serializers.ModelSerializer):
     author = UserSerializer(read_only=True)
@@ -69,11 +78,10 @@ class CommentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Comment
-        fields = ['id', 'post', 'author', 'content', 'created_at']
+        fields = ['id', 'post', 'author', 'content', 'created_at']  # ← AJUSTE: 'content' em vez de 'text' se model usar content
         read_only_fields = ['id', 'post', 'author', 'created_at']
 
     def create(self, validated_data):
-        # O contexto deve ser preenchido pela View (CommentListCreateAPIView)
         validated_data['post'] = self.context['post']
         validated_data['author'] = self.context['request'].user
         return super().create(validated_data)

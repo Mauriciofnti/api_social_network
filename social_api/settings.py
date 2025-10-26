@@ -31,6 +31,7 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
+    'corsheaders',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -44,6 +45,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -83,14 +85,14 @@ DATABASES = {
     }
 }
 
-import dj_database_url  # Para ler DATABASE_URL
+#import dj_database_url  # Para ler DATABASE_URL
 
 # Config DB: Usa PostgreSQL se DATABASE_URL setado, senão SQLite local
-DATABASES['default'] = dj_database_url.config(
-    default='sqlite:///db.sqlite3', 
-    conn_max_age=600, 
-    conn_health_checks=True 
-)
+# DATABASES['default'] = dj_database_url.config(
+#     default='sqlite:///db.sqlite3', 
+#     conn_max_age=600, 
+#     conn_health_checks=True 
+# )
 
 
 # Password validation
@@ -165,7 +167,14 @@ SPECTACULAR_SETTINGS = {
 
 AUTH_USER_MODEL = 'network.User'
 
-import dj_database_url
-DATABASES['default'] = dj_database_url.config(default='sqlite:///db.sqlite3')
 ALLOWED_HOSTS = ['*']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# CORS settings
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",  # Frontend local (Vite dev)
+    "http://127.0.0.1:5173",  # Alternativa pro localhost
+    # Se deployar o frontend depois, adiciona a URL dele aqui
+]
+
+CORS_ALLOW_CREDENTIALS = True
