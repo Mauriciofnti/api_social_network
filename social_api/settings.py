@@ -9,6 +9,10 @@ https://docs.djangoproject.com/en/5.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
+import os
+from dotenv import load_dotenv  # Pra ler .env local (instala: pip install python-dotenv)
+
+load_dotenv()
 import dj_database_url
 from pathlib import Path
 
@@ -20,12 +24,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-%*r6&@ep)lbdzgmh05n^o4q)+n0a1cf=-w30^ib*hr##r7*%mi'
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-%*r6&@ep)lbdzgmh05n^o4q)+n0a1cf=-w30^ib*hr##r7*%mi')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DEBUG', 'True').lower() == 'true'  # True local, False prod via env var
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')  # * local, lista em prod (ex: teu-domain.onrender.com)
 
 
 # Application definition
@@ -86,14 +90,7 @@ DATABASES = {
     )
 }
 
-#import dj_database_url  # Para ler DATABASE_URL
 
-# Config DB: Usa PostgreSQL se DATABASE_URL setado, senão SQLite local
-# DATABASES['default'] = dj_database_url.config(
-#     default='sqlite:///db.sqlite3', 
-#     conn_max_age=600, 
-#     conn_health_checks=True 
-# )
 
 
 # Password validation
@@ -175,7 +172,7 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",  # Frontend local (Vite dev)
     "http://127.0.0.1:5173",  # Alternativa pro localhost
-    # Se deployar o frontend depois, adiciona a URL dele aqui
+    "https://snaply-yikb.onrender.com"
 ]
 
 CORS_ALLOW_CREDENTIALS = True
