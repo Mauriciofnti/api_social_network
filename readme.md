@@ -85,30 +85,6 @@ Base URL: `http://127.0.0.1:8000/api/`.
 - Set in Render env vars.
 - Local test: Set `DATABASE_URL` in `.env`, run migrate.
 
-## Project Structure
-social-django/
-├── manage.py
-├── social_api/          # Global configs
-│   ├── settings.py
-│   └── urls.py
-├── network/             # Main app
-│   ├── models.py        # User, Post, Comment
-│   ├── serializers.py   # UserSerializer (nested), PostSerializer
-│   ├── views.py         # Generics + @api_view (toggle, like)
-│   ├── urls.py          # API routes
-│   ├── admin.py
-│   └── tests.py
-├── db.sqlite3           # Local DB (gitignore)
-├── requirements.txt
-├── README.md
-└── .gitignore
-text## Contribution
-1. Fork the repo.
-2. Branch: `git checkout -b feature/new-feature`.
-3. Commit: `git commit -m "Add new feature"`.
-4. Push: `git push origin feature/new-feature`.
-5. PR!
-
 ## License
 MIT License – see [LICENSE](LICENSE).
 Commit das Mudanças (em Inglês)
