@@ -169,7 +169,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",  # Frontend local (Vite dev)
     "http://127.0.0.1:5173",  # Alternativa pro localhost
     "https://snaply-yikb.onrender.com", #Render
-    "https://socialsnaply-7y0jrl179-mauricios-projects-77deca3f.vercel.app"
+    "https://socialsnaply.vercel.app"
 ]
 
 CORS_ALLOW_CREDENTIALS = True
