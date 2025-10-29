@@ -5,6 +5,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny, BasePermission
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework.generics import GenericAPIView
+from rest_framework.parsers import MultiPartParser, FormParser
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 from django.contrib.auth import get_user_model
 from .models import User, Post, Comment
@@ -18,7 +19,7 @@ class CustomTokenObtainPairView(GenericAPIView):
     permission_classes = [AllowAny]  # Público pra login
 
     @extend_schema(
-        request=serializer_class,  # Usa o serializer pra schema auto-gerado (resolve warning)
+        request=serializer_class,
         responses={
             200: OpenApiResponse(
                 description='Login bem-sucedido',
@@ -61,25 +62,41 @@ class CustomTokenObtainPairView(GenericAPIView):
             }
         }
         
-        print(f"DEBUG LOGIN: Enviando user: {user.username} (ID: {user.id})")
+        # print(f"DEBUG LOGIN: Enviando user: {user.username} (ID: {user.id})")
         
         return Response(response_data, status=status.HTTP_200_OK)
 
-# View pra user atual (me) - AJUSTE: Suporta GET e PATCH pra editar perfil
-class CurrentUserView(generics.RetrieveUpdateAPIView):  # ← MUDANÇA: De RetrieveAPIView pra RetrieveUpdateAPIView (suporta PATCH)
+# View pra user atual (me) - Suporta GET e PATCH pra editar perfil
+class CurrentUserView(generics.RetrieveUpdateAPIView):
+    """
+    Handles retrieval and update of the authenticated user's profile.
+    Supports partial updates (PATCH) including profile picture uploads.
+    """
     serializer_class = UserSerializer
-    permission_classes = [IsAuthenticated]  # Só logados
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]  # Permite upload via form-data
 
     def get_object(self):
-        return self.request.user  # Retorna o user autenticado pelo token
-    
+        return self.request.user
+
     def get_serializer_class(self):
         if self.request.method in ['PUT', 'PATCH']:
-            return UserUpdateSerializer  # ← ADICIONADO: Usa serializer restrito pra update (bio/password only)
+            return UserUpdateSerializer  # Serializer restrito pra update (bio/password/profile_picture)
         return self.serializer_class
 
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
+
     def patch(self, request, *args, **kwargs):
-        return self.update(request, partial=True)  # ← ADICIONADO: Suporte explícito pra PATCH parcial
+        return self.update(request, partial=True)
+
+    def update(self, request, *args, **kwargs):
+        response = super().update(request, *args, **kwargs)
+        if response.status_code == status.HTTP_200_OK:
+            response.data['message'] = 'Perfil atualizado com sucesso!'
+        return response
 
 # Permissão customizada: Leitura aberta, edição só para o dono
 class IsOwnerOrReadOnly(BasePermission):
@@ -120,6 +137,7 @@ class UserDetail(generics.RetrieveUpdateAPIView):
         ),
     }
 )
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_follow_status(request, user_id):
@@ -127,56 +145,13 @@ def get_follow_status(request, user_id):
         user_to_check = User.objects.get(id=user_id)
         if request.user.id == user_to_check.id:
             return Response({'error': 'Não aplica pra si mesmo'}, status=status.HTTP_400_BAD_REQUEST)
-        is_following = request.user in user_to_check.followers.all()
+            
+        is_following = user_to_check in request.user.following.all()
+        
         return Response({'is_following': is_following}, status=status.HTTP_200_OK)
     except User.DoesNotExist:
         return Response({'error': 'Usuário não encontrado'}, status=status.HTTP_404_NOT_FOUND)
-
-# Follow (mantido pra compatibilidade)
-@extend_schema(
-    methods=['post'],
-    request=None,
-    responses={
-        200: OpenApiResponse(description='Seguindo com sucesso', response={'type': 'object', 'properties': {'message': {'type': 'string'}}}),
-        404: OpenApiResponse(description='Usuário não encontrado', response={'type': 'object', 'properties': {'error': {'type': 'string'}}}),
-        400: OpenApiResponse(description='Usuário já seguido ou erro', response={'type': 'object', 'properties': {'error': {'type': 'string'}}}),
-    }
-)
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def follow_user(request, user_id):
-    try:
-        user_to_follow = User.objects.get(id=user_id)
-        if request.user in user_to_follow.followers.all():
-            return Response({'error': 'Você já segue este usuário'}, status=status.HTTP_400_BAD_REQUEST)
-        request.user.following.add(user_to_follow)
-        return Response({'message': 'Seguindo!'}, status=status.HTTP_200_OK)
-    except User.DoesNotExist:
-        return Response({'error': 'Usuário não encontrado'}, status=status.HTTP_404_NOT_FOUND)
-
-# Unfollow (mantido pra compatibilidade)
-@extend_schema(
-    methods=['post'],
-    request=None,
-    responses={
-        200: OpenApiResponse(description='Deixou de seguir com sucesso', response={'type': 'object', 'properties': {'message': {'type': 'string'}}}),
-        404: OpenApiResponse(description='Usuário não encontrado', response={'type': 'object', 'properties': {'error': {'type': 'string'}}}),
-        400: OpenApiResponse(description='Você não segue este usuário', response={'type': 'object', 'properties': {'error': {'type': 'string'}}}),
-    }
-)
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def unfollow_user(request, user_id):
-    try:
-        user_to_unfollow = User.objects.get(id=user_id)
-        if request.user not in user_to_unfollow.followers.all():
-            return Response({'error': 'Você não segue este usuário'}, status=status.HTTP_400_BAD_REQUEST)
-        request.user.following.remove(user_to_unfollow)
-        return Response({'message': 'Deixou de seguir!'}, status=status.HTTP_200_OK)
-    except User.DoesNotExist:
-        return Response({'error': 'Usuário não encontrado'}, status=status.HTTP_404_NOT_FOUND)
-
-# Toggle follow/unfollow (principal pra botão dinâmico)
+    
 @extend_schema(
     methods=['post'],
     request=None,
@@ -203,28 +178,29 @@ def toggle_follow_user(request, user_id):
         user_to_toggle = User.objects.get(id=user_id)
         if request.user.id == user_to_toggle.id:
             return Response({'error': 'Não pode seguir a si mesmo'}, status=status.HTTP_400_BAD_REQUEST)
+
+        is_following = user_to_toggle in request.user.following.all()
         
-        is_following = request.user in user_to_toggle.followers.all()
         if is_following:
             request.user.following.remove(user_to_toggle)
+            request.user.save()  # Salva o usuário logado
             message = 'Deixou de seguir!'
         else:
             request.user.following.add(user_to_toggle)
+            request.user.save()
             message = 'Seguindo!'
-        
-        # Recalcula counts
-        new_followers_count = user_to_toggle.followers.count()
-        new_following_count = request.user.following.count()
-        
+
+        new_followers_count = user_to_toggle.followers.count()  # Seguidores do ALVO (perfil visto)
+        current_user_following_count = request.user.following.count()  # Seguindo do USUÁRIO LOGADO
+
         return Response({
             'message': message,
             'is_following': not is_following,
-            'followers_count': new_followers_count,
-            'following_count': new_following_count,
+            'followers_count': new_followers_count,  # Para atualizar no ProfileView (alvo)
+            'following_count': current_user_following_count,  # Para atualizar no store do logado
         }, status=status.HTTP_200_OK)
     except User.DoesNotExist:
         return Response({'error': 'Usuário não encontrado'}, status=status.HTTP_404_NOT_FOUND)
-
 # Views para Posts
 class PostList(generics.ListCreateAPIView):
     serializer_class = PostSerializer
@@ -266,7 +242,7 @@ def like_post(request, post_id):
             return Response({'message': 'Curtiu!'}, status=status.HTTP_200_OK)
     except Post.DoesNotExist:
         return Response({'error': 'Post não encontrado'}, status=status.HTTP_404_NOT_FOUND)
-
+    
 # View para Comentários
 class CommentListCreateAPIView(generics.ListCreateAPIView):
     serializer_class = CommentSerializer
@@ -288,9 +264,12 @@ class FeedList(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        following = self.request.user.following.all()
-        # ← FIX: Sempre inclui posts do próprio user (union com following)
+        # Posts do usuário logado (sempre incluídos)
         own_posts = Post.objects.filter(author=self.request.user)
+        
+        # Posts dos followed (se existir)
+        following = self.request.user.following.all()
         if following.exists():
-            return Post.objects.filter(author__in=following) | own_posts.order_by('-created_at')
-        return own_posts.order_by('-created_at')  # Se sem following, só own
+            followed_posts = Post.objects.filter(author__in=following)
+            return (followed_posts | own_posts).order_by('-created_at') 
+        return own_posts.order_by('-created_at')
