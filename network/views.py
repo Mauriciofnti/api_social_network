@@ -8,8 +8,9 @@ from rest_framework.generics import GenericAPIView
 from rest_framework.parsers import MultiPartParser, FormParser
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 from django.contrib.auth import get_user_model
-from .models import User, Post, Comment
-from .serializers import UserSerializer, PostSerializer, CommentSerializer, UserUpdateSerializer 
+from django.shortcuts import get_object_or_404
+from .models import User, Post, Comment, Message, Conversation
+from .serializers import UserSerializer, PostSerializer, CommentSerializer, UserUpdateSerializer, ConversationSerializer, CreateMessageSerializer 
 
 User = get_user_model()
 
@@ -273,3 +274,131 @@ class FeedList(generics.ListAPIView):
             followed_posts = Post.objects.filter(author__in=following)
             return (followed_posts | own_posts).order_by('-created_at') 
         return own_posts.order_by('-created_at')
+    
+# ... todo o código existente até FeedList ...
+
+# NOVAS VIEWS PARA DMS
+@extend_schema(
+    methods=['post'],
+    request={'type': 'object', 'properties': {'target_user_id': {'type': 'integer'}}},
+    responses={
+        201: OpenApiResponse(description='Conversa criada/iniciada'),
+        400: OpenApiResponse(description='Erro (ex: mesmo usuário)'),
+        404: OpenApiResponse(description='Usuário não encontrado'),
+    }
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_conversation(request, target_user_id):
+    try:
+        # Valida ID
+        target_user_id = int(target_user_id)
+        if target_user_id <= 0:
+            return Response({'error': 'ID de usuário inválido'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        target_user = get_object_or_404(User, id=target_user_id)  # 404 auto se não existir
+        
+        if request.user.id == target_user.id:
+            return Response({'error': 'Não pode iniciar conversa consigo mesmo'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Verifica se já existe conversa (query safe com logs)
+        try:
+            conversation = Conversation.objects.filter(
+                participants=request.user
+            ).filter(
+                participants=target_user
+            ).first()
+            print(f"DEBUG DM: Query result - Conversation exists: {conversation is not None}")  # Log pra debug
+        except Exception as query_err:
+            print(f"DEBUG DM: Erro na query M2M: {query_err}")  # Log erro específico
+            return Response({'error': 'Erro ao verificar conversa existente'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        if not conversation:
+            conversation = Conversation.objects.create()
+            conversation.participants.add(request.user, target_user)
+            conversation.save()
+            print(f"DEBUG DM: Nova conversa criada ID {conversation.id}")  # Log
+
+        # Serializer com safe context
+        try:
+            serializer = ConversationSerializer(conversation)
+        except Exception as ser_err:
+            print(f"DEBUG DM: Erro no serializer: {ser_err}")
+            return Response({'error': 'Erro ao processar conversa'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    
+    except User.DoesNotExist:
+        return Response({'error': 'Usuário não encontrado'}, status=status.HTTP_404_NOT_FOUND)
+    except ValueError:
+        return Response({'error': 'ID de usuário inválido'}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        print(f"DEBUG DM: Erro inesperado: {e}")  # Log geral
+        return Response({'error': f'Erro interno: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+@extend_schema(
+    methods=['post'],
+    request={'type': 'object', 'properties': {'content': {'type': 'string'}}},
+    responses={
+        201: OpenApiResponse(description='Mensagem enviada'),
+        403: OpenApiResponse(description='Não autorizado na conversa'),
+        404: OpenApiResponse(description='Conversa não encontrada'),
+    }
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def send_message(request, conversation_id):
+    try:
+        conversation = get_object_or_404(Conversation, id=conversation_id)
+        print(f"DEBUG DM SEND: Conv ID {conversation_id} encontrada, participants: {conversation.participants.count()}")  # Log pra debug
+        
+        if request.user not in conversation.participants.all():
+            return Response({'error': 'Você não faz parte dessa conversa'}, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = CreateMessageSerializer(data=request.data, context={
+            'request': request,
+            'conversation': conversation
+        })
+        if serializer.is_valid():
+            message = serializer.save()
+            # Atualiza timestamp da conversa
+            conversation.updated_at = message.created_at
+            conversation.save()
+            print(f"DEBUG DM SEND: Msg enviada ID {message.id} em conv {conversation_id}")  # Log sucesso
+            return Response(ConversationSerializer(conversation).data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    except Conversation.DoesNotExist:
+        print(f"DEBUG DM SEND: Conv ID {conversation_id} não existe")  # Log específico
+        return Response({'error': 'Conversa não encontrada'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        print(f"DEBUG DM SEND: Erro inesperado: {e}")  # Log geral
+        return Response({'error': 'Erro interno ao enviar mensagem'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+# View pra listar conversas do user (adicione se quiser feed de DMs)
+@extend_schema(responses={200: ConversationSerializer(many=True)})
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_conversations(request):
+    conversations = request.user.conversations.all()
+    serializer = ConversationSerializer(conversations, many=True)
+    return Response(serializer.data)
+
+@extend_schema(
+    responses={200: ConversationSerializer()}
+)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_conversation(request, conversation_id):
+    """
+    Retorna detalhes de uma conversa específica (msgs, participants).
+    """
+    try:
+        conversation = get_object_or_404(Conversation, id=conversation_id)
+        if request.user not in conversation.participants.all():
+            return Response({'error': 'Você não faz parte dessa conversa'}, status=status.HTTP_403_FORBIDDEN)
+        
+        serializer = ConversationSerializer(conversation)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except Exception as e:
+        print(f"DEBUG DM GET: Erro: {e}")  # Log pra debug
+        return Response({'error': 'Erro ao carregar conversa'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

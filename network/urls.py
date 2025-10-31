@@ -1,8 +1,8 @@
 from django.urls import path
 from .views import (
     CustomTokenObtainPairView, CurrentUserView, UserList, UserDetail,
-    PostList, PostDetail, FeedList, CommentListCreateAPIView,
-    toggle_follow_user, get_follow_status, like_post
+    PostList, PostDetail, FeedList, CommentListCreateAPIView, 
+    toggle_follow_user, get_follow_status, like_post, create_conversation, send_message, list_conversations, get_conversation
 )
 
 urlpatterns = [
@@ -26,4 +26,10 @@ urlpatterns = [
     
     # Comments
     path('posts/<int:post_id>/comments/', CommentListCreateAPIView.as_view(), name='comment_list_create'),
+
+    #Mensages
+    path('conversations/create/<int:target_user_id>/', create_conversation, name='create_conversation'),
+    path('conversations/<int:conversation_id>/send/', send_message, name='send_message'),
+    path('conversations/', list_conversations, name='list_conversations'),
+    path('conversations/<int:conversation_id>/', get_conversation, name='get_conversation'),
 ]
