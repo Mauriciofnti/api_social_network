@@ -1,9 +1,12 @@
 from rest_framework import generics, status
+from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny, BasePermission
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.views import TokenObtainPairView
+from django.contrib.auth.hashers import check_password
 from rest_framework.generics import GenericAPIView
 from rest_framework.parsers import MultiPartParser, FormParser
 from drf_spectacular.utils import extend_schema, OpenApiResponse
@@ -13,59 +16,6 @@ from .models import User, Post, Comment, Message, Conversation
 from .serializers import UserSerializer, PostSerializer, CommentSerializer, UserUpdateSerializer, ConversationSerializer, CreateMessageSerializer 
 
 User = get_user_model()
-
-# SEÇÃO DE AUTENTICAÇÃO (JWT) - VERSÃO LIMPA E ÚNICA
-class CustomTokenObtainPairView(GenericAPIView):
-    serializer_class = TokenObtainPairSerializer
-    permission_classes = [AllowAny]  # Público pra login
-
-    @extend_schema(
-        request=serializer_class,
-        responses={
-            200: OpenApiResponse(
-                description='Login bem-sucedido',
-                response={
-                    'type': 'object',
-                    'properties': {
-                        'access': {'type': 'string'},
-                        'refresh': {'type': 'string'},
-                        'user': {
-                            'type': 'object',
-                            'properties': {
-                                'id': {'type': 'integer'},
-                                'username': {'type': 'string'},
-                                'email': {'type': 'string'}
-                            }
-                        }
-                    }
-                }
-            ),
-            400: OpenApiResponse(
-                description='Credenciais inválidas',
-                response={'type': 'object', 'properties': {'non_field_errors': {'type': 'array'}}}
-            )
-        }
-    )
-    def post(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        
-        user = serializer.user
-        refresh = RefreshToken.for_user(user)
-        
-        response_data = {
-            'access': str(refresh.access_token),
-            'refresh': str(refresh),
-            'user': {
-                'id': user.id,
-                'username': user.username,
-                'email': user.email,
-            }
-        }
-        
-        # print(f"DEBUG LOGIN: Enviando user: {user.username} (ID: {user.id})")
-        
-        return Response(response_data, status=status.HTTP_200_OK)
 
 # View pra user atual (me) - Suporta GET e PATCH pra editar perfil
 class CurrentUserView(generics.RetrieveUpdateAPIView):
@@ -99,6 +49,27 @@ class CurrentUserView(generics.RetrieveUpdateAPIView):
             response.data['message'] = 'Perfil atualizado com sucesso!'
         return response
 
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        email = attrs.get("username")  # o front envia o e-mail neste campo
+        password = attrs.get("password")
+
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            raise serializers.ValidationError("Usuário não encontrado")
+
+        if not check_password(password, user.password):
+            raise serializers.ValidationError("Senha incorreta")
+
+        attrs["username"] = user.username  # força o JWT a reconhecer o usuário
+        data = super().validate(attrs)
+        return data
+
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    serializer_class = CustomTokenObtainPairSerializer        
+
 # Permissão customizada: Leitura aberta, edição só para o dono
 class IsOwnerOrReadOnly(BasePermission):
     def has_object_permission(self, request, view, obj):
@@ -111,6 +82,17 @@ class UserList(generics.ListCreateAPIView):
     queryset = User.objects.all()
     serializer_class = UserSerializer
     permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def create(self, request, *args, **kwargs):
+        print("🟡 Dados recebidos no POST /api/users/:", request.data)
+        serializer = self.get_serializer(data=request.data)
+        if not serializer.is_valid():
+            print("🔴 Erros de validação:", serializer.errors)  # 👈 adiciona esta linha
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        self.perform_create(serializer)
+        print("🟢 Usuário criado com sucesso:", serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 class UserDetail(generics.RetrieveUpdateAPIView):
     queryset = User.objects.all()
