@@ -170,7 +170,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",  # Alternativa pro localhost
     "https://snaply-yikb.onrender.com", #Render
     "https://socialsnaply.vercel.app",
-    "https://snaply-ruby.vercel.app"
+    "https://snaply-ruby.vercel.app",
+    "https://snaply-git-new-feature-guilherme-cardosos-projects-1aac74b2.vercel.app"
 ]
 
 CORS_ALLOW_CREDENTIALS = True
