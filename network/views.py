@@ -7,6 +7,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework.generics import GenericAPIView
 from rest_framework.parsers import MultiPartParser, FormParser
 from drf_spectacular.utils import extend_schema, OpenApiResponse
+from django.db.models import Prefetch
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 from .models import User, Post, Comment, Message, Conversation
@@ -14,10 +15,9 @@ from .serializers import UserSerializer, PostSerializer, CommentSerializer, User
 
 User = get_user_model()
 
-# SEÇÃO DE AUTENTICAÇÃO (JWT) - VERSÃO LIMPA E ÚNICA
 class CustomTokenObtainPairView(GenericAPIView):
     serializer_class = TokenObtainPairSerializer
-    permission_classes = [AllowAny]  # Público pra login
+    permission_classes = [AllowAny]
 
     @extend_schema(
         request=serializer_class,
@@ -63,11 +63,8 @@ class CustomTokenObtainPairView(GenericAPIView):
             }
         }
         
-        # print(f"DEBUG LOGIN: Enviando user: {user.username} (ID: {user.id})")
-        
         return Response(response_data, status=status.HTTP_200_OK)
 
-# View pra user atual (me) - Suporta GET e PATCH pra editar perfil
 class CurrentUserView(generics.RetrieveUpdateAPIView):
     """
     Handles retrieval and update of the authenticated user's profile.
@@ -75,14 +72,14 @@ class CurrentUserView(generics.RetrieveUpdateAPIView):
     """
     serializer_class = UserSerializer
     permission_classes = [IsAuthenticated]
-    parser_classes = [MultiPartParser, FormParser]  # Permite upload via form-data
+    parser_classes = [MultiPartParser, FormParser]
 
     def get_object(self):
         return self.request.user
 
     def get_serializer_class(self):
         if self.request.method in ['PUT', 'PATCH']:
-            return UserUpdateSerializer  # Serializer restrito pra update (bio/password/profile_picture)
+            return UserUpdateSerializer
         return self.serializer_class
 
     def get_serializer_context(self):
@@ -99,14 +96,12 @@ class CurrentUserView(generics.RetrieveUpdateAPIView):
             response.data['message'] = 'Perfil atualizado com sucesso!'
         return response
 
-# Permissão customizada: Leitura aberta, edição só para o dono
 class IsOwnerOrReadOnly(BasePermission):
     def has_object_permission(self, request, view, obj):
         if request.method in ['GET', 'HEAD', 'OPTIONS']:
             return True
         return obj == request.user
 
-# Views para Usuários
 class UserList(generics.ListCreateAPIView):
     queryset = User.objects.all()
     serializer_class = UserSerializer
@@ -128,7 +123,6 @@ class UserDetail(generics.RetrieveUpdateAPIView):
     def put(self, request, *args, **kwargs):
         return Response({'error': 'PUT não suportado. Use PATCH para atualizações parciais.'}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
-# GET status de follow pra inicializar botão no frontend
 @extend_schema(
     methods=['get'],
     responses={
@@ -138,7 +132,6 @@ class UserDetail(generics.RetrieveUpdateAPIView):
         ),
     }
 )
-
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_follow_status(request, user_id):
@@ -184,25 +177,26 @@ def toggle_follow_user(request, user_id):
         
         if is_following:
             request.user.following.remove(user_to_toggle)
-            request.user.save()  # Salva o usuário logado
+            request.user.save()
             message = 'Deixou de seguir!'
         else:
             request.user.following.add(user_to_toggle)
             request.user.save()
             message = 'Seguindo!'
 
-        new_followers_count = user_to_toggle.followers.count()  # Seguidores do ALVO (perfil visto)
-        current_user_following_count = request.user.following.count()  # Seguindo do USUÁRIO LOGADO
+        new_followers_count = user_to_toggle.followers.count()
+        current_user_following_count = request.user.following.count()
 
         return Response({
             'message': message,
             'is_following': not is_following,
-            'followers_count': new_followers_count,  # Para atualizar no ProfileView (alvo)
-            'following_count': current_user_following_count,  # Para atualizar no store do logado
+            'followers_count': new_followers_count, 
+            'following_count': current_user_following_count,
         }, status=status.HTTP_200_OK)
     except User.DoesNotExist:
         return Response({'error': 'Usuário não encontrado'}, status=status.HTTP_404_NOT_FOUND)
-# Views para Posts
+
+
 class PostList(generics.ListCreateAPIView):
     serializer_class = PostSerializer
     permission_classes = [IsAuthenticated]
@@ -225,7 +219,17 @@ class PostDetail(generics.RetrieveUpdateDestroyAPIView):
     methods=['post'],
     request=None,
     responses={
-        200: OpenApiResponse(description='Curtiu ou descurtida', response={'type': 'object', 'properties': {'message': {'type': 'string'}}}),
+        200: OpenApiResponse(
+            description='Curtiu ou descurtida com count atualizado', 
+            response={
+                'type': 'object', 
+                'properties': {
+                    'message': {'type': 'string'},
+                    'likes_count': {'type': 'integer'},
+                    'user_has_liked': {'type': 'boolean'}
+                }
+            }
+        ),
         404: OpenApiResponse(description='Post não encontrado', response={'type': 'object', 'properties': {'error': {'type': 'string'}}}),
         400: OpenApiResponse(description='Erro na curtir', response={'type': 'object', 'properties': {'error': {'type': 'string'}}}),
     }
@@ -234,17 +238,31 @@ class PostDetail(generics.RetrieveUpdateDestroyAPIView):
 @permission_classes([IsAuthenticated])
 def like_post(request, post_id):
     try:
-        post = Post.objects.get(id=post_id)
-        if request.user in post.likes.all():
-            post.likes.remove(request.user)
-            return Response({'message': 'Curtiu cancelada!'}, status=status.HTTP_200_OK)
+        post = get_object_or_404(Post, id=post_id)
+        user = request.user
+        
+        if user in post.likes.all():
+            post.likes.remove(user)
+            has_liked = False
+            message = 'Curtiu cancelada!'
         else:
-            post.likes.add(request.user)
-            return Response({'message': 'Curtiu!'}, status=status.HTTP_200_OK)
-    except Post.DoesNotExist:
-        return Response({'error': 'Post não encontrado'}, status=status.HTTP_404_NOT_FOUND)
+            post.likes.add(user)
+            has_liked = True
+            message = 'Curtiu!'
+        
+        likes_count = post.likes.count()
+        
+        serializer_context = {'request': request}
+        
+        return Response({
+            'message': message,
+            'likes_count': likes_count,
+            'user_has_liked': has_liked
+        }, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({'error': f'Erro ao processar like: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
     
-# View para Comentários
+
 class CommentListCreateAPIView(generics.ListCreateAPIView):
     serializer_class = CommentSerializer
     permission_classes = [IsAuthenticated]
@@ -259,25 +277,21 @@ class CommentListCreateAPIView(generics.ListCreateAPIView):
         serializer.context['post'] = post
         serializer.save(author=self.request.user)
 
-# Feed
 class FeedList(generics.ListAPIView):
     serializer_class = PostSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        # Posts do usuário logado (sempre incluídos)
-        own_posts = Post.objects.filter(author=self.request.user)
+        following_users = list(self.request.user.following.all())
+        authors = [self.request.user] + following_users 
         
-        # Posts dos followed (se existir)
-        following = self.request.user.following.all()
-        if following.exists():
-            followed_posts = Post.objects.filter(author__in=following)
-            return (followed_posts | own_posts).order_by('-created_at') 
-        return own_posts.order_by('-created_at')
+        return Post.objects.filter(
+            author__in=authors
+        ).select_related('author').prefetch_related(
+            Prefetch('likes'),  # Likes do post
+            Prefetch('comments', queryset=Comment.objects.select_related('author'))
+        ).order_by('-created_at')
     
-# ... todo o código existente até FeedList ...
-
-# NOVAS VIEWS PARA DMS
 @extend_schema(
     methods=['post'],
     request={'type': 'object', 'properties': {'target_user_id': {'type': 'integer'}}},
@@ -291,49 +305,35 @@ class FeedList(generics.ListAPIView):
 @permission_classes([IsAuthenticated])
 def create_conversation(request, target_user_id):
     try:
-        # Valida ID
-        target_user_id = int(target_user_id)
+        try:
+            target_user_id = int(target_user_id)
+        except ValueError:
+            return Response({'error': 'ID de usuário inválido'}, status=status.HTTP_400_BAD_REQUEST)
+        
         if target_user_id <= 0:
             return Response({'error': 'ID de usuário inválido'}, status=status.HTTP_400_BAD_REQUEST)
         
-        target_user = get_object_or_404(User, id=target_user_id)  # 404 auto se não existir
+        target_user = get_object_or_404(User, id=target_user_id)
         
         if request.user.id == target_user.id:
             return Response({'error': 'Não pode iniciar conversa consigo mesmo'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Verifica se já existe conversa (query safe com logs)
-        try:
-            conversation = Conversation.objects.filter(
-                participants=request.user
-            ).filter(
-                participants=target_user
-            ).first()
-            print(f"DEBUG DM: Query result - Conversation exists: {conversation is not None}")  # Log pra debug
-        except Exception as query_err:
-            print(f"DEBUG DM: Erro na query M2M: {query_err}")  # Log erro específico
-            return Response({'error': 'Erro ao verificar conversa existente'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        conversation = Conversation.objects.filter(
+            participants=request.user
+        ).filter(
+            participants=target_user
+        ).first()
 
         if not conversation:
             conversation = Conversation.objects.create()
             conversation.participants.add(request.user, target_user)
             conversation.save()
-            print(f"DEBUG DM: Nova conversa criada ID {conversation.id}")  # Log
 
-        # Serializer com safe context
-        try:
-            serializer = ConversationSerializer(conversation)
-        except Exception as ser_err:
-            print(f"DEBUG DM: Erro no serializer: {ser_err}")
-            return Response({'error': 'Erro ao processar conversa'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        serializer = ConversationSerializer(conversation, context={'request': request})
 
         return Response(serializer.data, status=status.HTTP_201_CREATED)
     
-    except User.DoesNotExist:
-        return Response({'error': 'Usuário não encontrado'}, status=status.HTTP_404_NOT_FOUND)
-    except ValueError:
-        return Response({'error': 'ID de usuário inválido'}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
-        print(f"DEBUG DM: Erro inesperado: {e}")  # Log geral
         return Response({'error': f'Erro interno: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
 @extend_schema(
@@ -350,8 +350,7 @@ def create_conversation(request, target_user_id):
 def send_message(request, conversation_id):
     try:
         conversation = get_object_or_404(Conversation, id=conversation_id)
-        print(f"DEBUG DM SEND: Conv ID {conversation_id} encontrada, participants: {conversation.participants.count()}")  # Log pra debug
-        
+
         if request.user not in conversation.participants.all():
             return Response({'error': 'Você não faz parte dessa conversa'}, status=status.HTTP_403_FORBIDDEN)
 
@@ -361,26 +360,19 @@ def send_message(request, conversation_id):
         })
         if serializer.is_valid():
             message = serializer.save()
-            # Atualiza timestamp da conversa
             conversation.updated_at = message.created_at
             conversation.save()
-            print(f"DEBUG DM SEND: Msg enviada ID {message.id} em conv {conversation_id}")  # Log sucesso
             return Response(ConversationSerializer(conversation).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    except Conversation.DoesNotExist:
-        print(f"DEBUG DM SEND: Conv ID {conversation_id} não existe")  # Log específico
-        return Response({'error': 'Conversa não encontrada'}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
-        print(f"DEBUG DM SEND: Erro inesperado: {e}")  # Log geral
         return Response({'error': 'Erro interno ao enviar mensagem'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
-# View pra listar conversas do user (adicione se quiser feed de DMs)
 @extend_schema(responses={200: ConversationSerializer(many=True)})
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def list_conversations(request):
-    conversations = request.user.conversations.all()
-    serializer = ConversationSerializer(conversations, many=True)
+    conversations = request.user.conversations.all().order_by('-updated_at')
+    serializer = ConversationSerializer(conversations, many=True, context={'request': request})
     return Response(serializer.data)
 
 @extend_schema(
@@ -391,14 +383,18 @@ def list_conversations(request):
 def get_conversation(request, conversation_id):
     """
     Retorna detalhes de uma conversa específica (msgs, participants).
+    Suporta paginação: ?page=1&limit=20 pra mensagens.
     """
     try:
         conversation = get_object_or_404(Conversation, id=conversation_id)
         if request.user not in conversation.participants.all():
             return Response({'error': 'Você não faz parte dessa conversa'}, status=status.HTTP_403_FORBIDDEN)
         
-        serializer = ConversationSerializer(conversation)
+        serializer = ConversationSerializer(conversation, context={
+            'request': request,
+            'page': request.query_params.get('page', 1),
+            'limit': request.query_params.get('limit', 20)
+        })
         return Response(serializer.data, status=status.HTTP_200_OK)
     except Exception as e:
-        print(f"DEBUG DM GET: Erro: {e}")  # Log pra debug
         return Response({'error': 'Erro ao carregar conversa'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

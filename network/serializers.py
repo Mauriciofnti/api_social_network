@@ -39,7 +39,6 @@ class UserSerializer(serializers.ModelSerializer):
     def get_following_count(self, obj) -> int:
         return obj.following.count()
 
-# SERIALIZER PARA ATUALIZAÇÃO (PATCH) - AJUSTE: Fields explícitos pra bio/password only
 class UserUpdateSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=6, required=False)
 
@@ -61,9 +60,8 @@ class UserUpdateSerializer(serializers.ModelSerializer):
             updated_instance.save()
             return updated_instance
         except Exception as e:
-            # Log erro para debug
             print("Erro no update:", str(e))
-            raise  # Re-raise para 500 virar 400 com detalhe
+            raise
 
 class CommentSerializer(serializers.ModelSerializer):
     author = UserSerializer(read_only=True)
@@ -83,27 +81,33 @@ class PostSerializer(serializers.ModelSerializer):
     author = UserSerializer(read_only=True)
     likes_count = serializers.SerializerMethodField()
     comments = CommentSerializer(many=True, read_only=True)
+    user_has_liked = serializers.SerializerMethodField()
 
     class Meta:
         model = Post
-        fields = ['id', 'author', 'content', 'created_at', 'likes_count', 'comments']
+        fields = ['id', 'author', 'content', 'created_at', 'likes_count', 'comments', 'user_has_liked']
 
     @extend_schema_field(int)
     def get_likes_count(self, obj) -> int:
         return obj.likes.count()
 
-# NOVOS SERIALIZERS PARA DMS
+    def get_user_has_liked(self, obj):
+        user = self.context['request'].user
+        if user.is_authenticated:
+            return obj.likes.filter(id=user.id).exists()
+        return False
+
 class MessageSerializer(serializers.ModelSerializer):
-    author = UserSerializer(read_only=True)  # Nested pra mostrar quem enviou
+    author = UserSerializer(read_only=True)
 
     class Meta:
         model = Message
         fields = ['id', 'author', 'content', 'created_at', 'is_read']
 
 class ConversationSerializer(serializers.ModelSerializer):
-    participants = UserSerializer(many=True, read_only=True)  # Array de users na conversa
-    messages = MessageSerializer(many=True, read_only=True)  # Array de msgs (limite se precisar)
-    last_message = serializers.SerializerMethodField()  # Preview da última msg
+    participants = UserSerializer(many=True, read_only=True)
+    messages = MessageSerializer(many=True, read_only=True)
+    last_message = serializers.SerializerMethodField()
 
     class Meta:
         model = Conversation
